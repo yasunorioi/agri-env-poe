@@ -4,13 +4,13 @@
 #pragma once
 
 #include <Arduino.h>
-#include <Ethernet.h>
+#include <NetworkClient.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include "config.h"
 #include "sensors.h"
 
-extern EthernetClient g_ethClient;
+extern NetworkClient g_ethClient;
 extern PubSubClient   g_mqtt;
 
 inline bool mqttHasHost() {

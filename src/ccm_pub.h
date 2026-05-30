@@ -10,8 +10,8 @@
 #pragma once
 
 #include <Arduino.h>
-#include <Ethernet.h>
-#include <EthernetUdp.h>
+
+#include <NetworkUdp.h>
 #include "config.h"
 #include "sensors.h"
 
@@ -19,12 +19,13 @@ static const IPAddress CCM_MULTICAST(224, 0, 0, 1);
 static const uint16_t  CCM_PORT      = 16520;
 static const char* const UECS_VERSION = "1.00-E10";
 
-extern EthernetUDP g_ccmUDP;
+extern NetworkUDP g_ccmUDP;
 
 inline void ccmBegin() {
-  // Arduino Ethernet's EthernetUDP doesn't expose a multicast TX bind; we
-  // just open the UDP socket and use beginPacket() with the multicast IP.
-  g_ccmUDP.begin(CCM_PORT);
+  // Send-only. begin(0) opens an ephemeral UDP socket; beginMulticast()
+  // would additionally call igmp_joingroup which errors on 224.0.0.1
+  // (the all-hosts group is implicitly joined on every netif).
+  g_ccmUDP.begin(0);
 }
 
 inline String buildOneDatum(const char *type, int order, int region,

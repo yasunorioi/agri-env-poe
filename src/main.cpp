@@ -7,19 +7,17 @@
 //     - ENV III: SHT30 0x44, QMP6988 0x70
 //     - SCD41:   0x62
 //
-// First flash via USB-C; subsequent flashes over Ethernet via ArduinoOTA.
+// Built on arduino-esp32 3.x (via the pioarduino fork). W5500 runs through
+// the ESP-IDF spi_w5500 driver + lwIP so ESPmDNS and ArduinoOTA work.
 
 #include <Arduino.h>
 #include <SPI.h>
-#include <Ethernet.h>
-#include <EthernetUdp.h>
+#include <ETH.h>
+#include <Network.h>
+#include <NetworkUdp.h>
 #include <PubSubClient.h>
-// ArduinoOTA pulls ESPmDNS which crashes ("Invalid mbox" in tcpip.c) when
-// the ESP-IDF lwIP tcpip thread isn't running — i.e. whenever we're on
-// Arduino-Ethernet via W5500 SPI instead of ESP32's native ETH driver. We
-// won't use OTA until we either migrate to the native driver or write a
-// W5500-side mDNS responder. Reflash via USB for now.
-// #include <ArduinoOTA.h>
+#include <ArduinoOTA.h>
+#include <ESPmDNS.h>
 #include <FastLED.h>
 #include <Wire.h>
 #include <SHT3X.h>
@@ -33,17 +31,18 @@
 #include "web_ui.h"
 #include "led_state.h"
 
-// ===== Firmware identity =====
 const char *FW_NAME    = "agri-env-poe";
-const char *FW_VERSION = "0.1.0";
+const char *FW_VERSION = "0.2.0";
 
-// ===== W5500 SPI pinout (M5 ATOM PoE base) =====
+// W5500 SPI pinout (M5 ATOM PoE base)
 static const int PIN_W5500_SCK  = 22;
 static const int PIN_W5500_MISO = 23;
 static const int PIN_W5500_MOSI = 33;
 static const int PIN_W5500_CS   = 19;
+static const int PIN_W5500_IRQ  = -1;
+static const int PIN_W5500_RST  = -1;
 
-// ===== globals declared extern elsewhere =====
+// globals declared extern in headers
 Config g_cfg;
 
 float    g_temp_c        = NAN;
@@ -60,54 +59,68 @@ SHT3X   g_sht;
 QMP6988 g_qmp;
 SensirionI2cScd4x g_scd;
 
-EthernetUDP    g_ccmUDP;
-EthernetClient g_ethClient;
-PubSubClient   g_mqtt(g_ethClient);
-EthernetServerWrap g_webServer(80);
+NetworkUDP    g_ccmUDP;
+NetworkClient g_ethClient;
+PubSubClient  g_mqtt(g_ethClient);
+NetworkServer g_webServer(80);
 
 CRGB g_led[NEOPIXEL_NUM];
 LedState g_led_state = LED_BOOT;
 
-// ===== eth state (mirrors agri-rain-poe's pattern) =====
 static bool g_link_up    = false;
 static bool g_have_lease = false;
 
-static void macFromEfuse(uint8_t mac[6]) {
-  uint64_t chip = ESP.getEfuseMac();
-  mac[0] = 0x02;  // locally administered, unicast
-  mac[1] = (chip >> 8)  & 0xFF;
-  mac[2] = (chip >> 16) & 0xFF;
-  mac[3] = (chip >> 24) & 0xFF;
-  mac[4] = (chip >> 32) & 0xFF;
-  mac[5] = (chip >> 40) & 0xFF;
-}
-
-static void ethernetBegin() {
-  SPI.begin(PIN_W5500_SCK, PIN_W5500_MISO, PIN_W5500_MOSI, PIN_W5500_CS);
-  Ethernet.init(PIN_W5500_CS);
-  uint8_t mac[6];
-  macFromEfuse(mac);
-  Serial.printf("[NET] MAC %02X:%02X:%02X:%02X:%02X:%02X\n",
-                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-  Serial.print("[NET] DHCP…");
-  if (Ethernet.begin(mac, 8000, 4000) == 1) {
-    g_have_lease = true;
-    IPAddress ip = Ethernet.localIP();
-    Serial.printf(" %u.%u.%u.%u\n", ip[0], ip[1], ip[2], ip[3]);
-  } else {
-    g_have_lease = false;
-    Serial.println(" failed");
+static void onNetworkEvent(arduino_event_id_t event) {
+  switch (event) {
+    case ARDUINO_EVENT_ETH_START:
+      ETH.setHostname(g_cfg.hostname);
+      Serial.println("[ETH] start");
+      break;
+    case ARDUINO_EVENT_ETH_CONNECTED:
+      g_link_up = true;
+      Serial.println("[ETH] link UP");
+      break;
+    case ARDUINO_EVENT_ETH_DISCONNECTED:
+      g_link_up = false;
+      g_have_lease = false;
+      Serial.println("[ETH] link DOWN");
+      break;
+    case ARDUINO_EVENT_ETH_GOT_IP:
+      g_have_lease = true;
+      Serial.printf("[ETH] IP %s\n", ETH.localIP().toString().c_str());
+      break;
+    case ARDUINO_EVENT_ETH_LOST_IP:
+      g_have_lease = false;
+      Serial.println("[ETH] lost IP");
+      break;
+    default: break;
   }
 }
 
-// Polls link state and keeps DHCP healthy. Same idiom as agri-rain-poe —
-// Arduino-Ethernet's begin() is reset-on-call, so on a fresh LinkON we just
-// re-run it to (re)acquire a lease without touching anything else.
-static void ethernetMaintain() {
-  EthernetLinkStatus link = Ethernet.linkStatus();
-  g_link_up = (link == LinkON);
-  if (g_link_up && !g_have_lease) ethernetBegin();
-  if (g_link_up && g_have_lease)  Ethernet.maintain();
+static void ethernetBegin() {
+  SPI.begin(PIN_W5500_SCK, PIN_W5500_MISO, PIN_W5500_MOSI);
+  if (!ETH.begin(ETH_PHY_W5500, 1,
+                 PIN_W5500_CS, PIN_W5500_IRQ, PIN_W5500_RST,
+                 SPI, 20)) {
+    Serial.println("[ETH] ETH.begin failed");
+  }
+}
+
+static void mdnsBegin() {
+  if (!MDNS.begin(g_cfg.hostname)) {
+    Serial.println("[MDNS] begin failed");
+    return;
+  }
+  MDNS.addService("http", "tcp", 80);
+  Serial.printf("[MDNS] %s.local\n", g_cfg.hostname);
+}
+
+static void otaBegin() {
+  ArduinoOTA.setHostname(g_cfg.hostname);
+  ArduinoOTA.onStart([]{ Serial.println("[OTA] start"); });
+  ArduinoOTA.onEnd  ([]{ Serial.println("[OTA] end");   });
+  ArduinoOTA.onError([](ota_error_t e){ Serial.printf("[OTA] err %u\n", e); });
+  ArduinoOTA.begin();
 }
 
 void setup() {
@@ -126,17 +139,26 @@ void setup() {
                 g_cfg.ccm_enabled ? "on" : "off");
 
   sensorsBegin();
+
+  Network.onEvent(onNetworkEvent);
   ethernetBegin();
+
+  uint32_t t0 = millis();
+  while (!g_have_lease && millis() - t0 < 8000) delay(50);
+  if (!g_have_lease) Serial.println("[NET] no DHCP yet — continuing");
+
   ccmBegin();
   g_webServer.begin();
   g_mqtt.setBufferSize(512);
   g_mqtt.setKeepAlive(30);
+  mdnsBegin();
+  otaBegin();
 
   Serial.println("[BOOT] ready");
 }
 
 void loop() {
-  ethernetMaintain();
+  ArduinoOTA.handle();
   handleWebClient(g_link_up, g_have_lease);
 
   static uint32_t lastSensorPoll = 0;
@@ -146,7 +168,6 @@ void loop() {
     sensorsPoll();
   }
 
-  // MQTT keepalive + periodic publish
   if (g_link_up && g_have_lease && mqttHasHost()) {
     if (!g_mqtt.connected()) {
       static uint32_t lastTry = 0;
@@ -162,7 +183,6 @@ void loop() {
     }
   }
 
-  // CCM multicast cadence
   if (g_link_up && g_have_lease && g_cfg.ccm_enabled) {
     static uint32_t lastCcm = 0;
     uint32_t interval = (uint32_t)g_cfg.ccm_interval_s * 1000UL;
@@ -172,15 +192,13 @@ void loop() {
     }
   }
 
-  // LED state machine
   LedState desired;
-  if (!g_link_up)                              desired = LED_NO_LINK;
-  else if (!g_have_lease)                       desired = LED_NO_LEASE;
+  if (!g_link_up)                                desired = LED_NO_LINK;
+  else if (!g_have_lease)                        desired = LED_NO_LEASE;
   else if (mqttHasHost() && !g_mqtt.connected()) desired = LED_NO_MQTT;
-  else                                          desired = LED_OK;
+  else                                           desired = LED_OK;
   if (desired != g_led_state) { g_led_state = desired; ledApply(); }
 
-  // Periodic status print
   static uint32_t lastStatus = 0;
   if (now - lastStatus >= 30000) {
     lastStatus = now;
