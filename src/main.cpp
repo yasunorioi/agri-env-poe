@@ -14,7 +14,12 @@
 #include <Ethernet.h>
 #include <EthernetUdp.h>
 #include <PubSubClient.h>
-#include <ArduinoOTA.h>
+// ArduinoOTA pulls ESPmDNS which crashes ("Invalid mbox" in tcpip.c) when
+// the ESP-IDF lwIP tcpip thread isn't running — i.e. whenever we're on
+// Arduino-Ethernet via W5500 SPI instead of ESP32's native ETH driver. We
+// won't use OTA until we either migrate to the native driver or write a
+// W5500-side mDNS responder. Reflash via USB for now.
+// #include <ArduinoOTA.h>
 #include <FastLED.h>
 #include <Wire.h>
 #include <SHT3X.h>
@@ -105,14 +110,6 @@ static void ethernetMaintain() {
   if (g_link_up && g_have_lease)  Ethernet.maintain();
 }
 
-static void otaBegin() {
-  ArduinoOTA.setHostname(g_cfg.hostname);
-  ArduinoOTA.onStart([]{ Serial.println("[OTA] start"); });
-  ArduinoOTA.onEnd  ([]{ Serial.println("[OTA] end");   });
-  ArduinoOTA.onError([](ota_error_t e){ Serial.printf("[OTA] err %u\n", e); });
-  ArduinoOTA.begin();
-}
-
 void setup() {
   Serial.begin(115200);
   delay(200);
@@ -134,13 +131,11 @@ void setup() {
   g_webServer.begin();
   g_mqtt.setBufferSize(512);
   g_mqtt.setKeepAlive(30);
-  otaBegin();
 
   Serial.println("[BOOT] ready");
 }
 
 void loop() {
-  ArduinoOTA.handle();
   ethernetMaintain();
   handleWebClient(g_link_up, g_have_lease);
 
