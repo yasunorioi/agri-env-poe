@@ -1,9 +1,11 @@
 // agri-env-poe — ENV III (SHT30 + QMP6988) + SCD41 CO2 node on M5 ATOM PoE.
-// MQTT + UECS-CCM publishers, web UI, mDNS + OTA. Most plumbing lives in
+// agriha MQTT publisher, web UI, mDNS + OTA. Most plumbing lives in
 // agri-node-poe-core; this sketch wires the three I²C sensors in.
+// UECS-CCM was dropped in 0.4.0 (MQTT-only; see mqtt_pub.h).
 
 #include <Arduino.h>
 #include <Wire.h>
+#include <time.h>
 #include <SHT3X.h>
 #include <QMP6988.h>
 #include <SensirionI2cScd4x.h>
@@ -12,10 +14,9 @@
 #include "config.h"
 #include "sensors.h"
 #include "mqtt_pub.h"
-#include "ccm_pub.h"
 
 const char *FW_NAME    = "agri-env-poe";
-const char *FW_VERSION = "0.3.1";
+const char *FW_VERSION = "0.4.0";
 
 // globals declared extern in headers
 AppConfig g_cfg;
@@ -58,27 +59,6 @@ static String renderDashboardSensors() {
   return s;
 }
 
-static String renderConfigSensorRows() {
-  String s;
-  auto row = [&](const char *label, const char *name, int16_t val) {
-    s += "<tr><th>"; s += label;
-    s += "</th><td><input type=number name="; s += name;
-    s += " value='"; s += val; s += "'></td></tr>";
-  };
-  row("Order (Temp)",     "ccm_ot", g_cfg.ccm_order_temp);
-  row("Order (Humid)",    "ccm_oh", g_cfg.ccm_order_humid);
-  row("Order (Pressure)", "ccm_op", g_cfg.ccm_order_pressure);
-  row("Order (CO2)",      "ccm_oc", g_cfg.ccm_order_co2);
-  return s;
-}
-
-static void applyConfigSensorForm(const String &body) {
-  g_cfg.ccm_order_temp     = (int16_t)agri::parseFormInt(body, "ccm_ot", g_cfg.ccm_order_temp);
-  g_cfg.ccm_order_humid    = (int16_t)agri::parseFormInt(body, "ccm_oh", g_cfg.ccm_order_humid);
-  g_cfg.ccm_order_pressure = (int16_t)agri::parseFormInt(body, "ccm_op", g_cfg.ccm_order_pressure);
-  g_cfg.ccm_order_co2      = (int16_t)agri::parseFormInt(body, "ccm_oc", g_cfg.ccm_order_co2);
-}
-
 static void addStatusFields(JsonObject doc) {
   if (g_sht30_ok) {
     doc["temp_c"]    = g_temp_c;
@@ -95,24 +75,25 @@ void setup() {
 
   agri::Led::begin();
   loadConfig();
-  Serial.printf("[CFG] node=%s mqtt_host=%s ccm=%s\n",
+  Serial.printf("[CFG] node=%s mqtt_host=%s prefix=%s\n",
                 g_cfg.common.node_id,
                 g_cfg.common.mqtt_host[0] ? g_cfg.common.mqtt_host : "(unset)",
-                g_cfg.common.ccm_enabled ? "on" : "off");
+                g_cfg.common.mqtt_topic_prefix);
 
   sensorsBegin();
 
   agri::Network::begin(g_cfg.common.hostname);
   agri::Network::waitForLease();
 
-  agri::ccmBegin();
+  // SNTP for the {value,unit,ts} payloads (UTC epoch; non-blocking, ts=0
+  // until the first sync lands).
+  configTime(0, 0, "pool.ntp.org");
+
   agri::MQTT::begin();
 
   agri::WebHooks hooks;
   hooks.nodeTitle             = [](){ return FW_NAME; };
   hooks.renderDashboardSensors= renderDashboardSensors;
-  hooks.renderConfigSensorRows= renderConfigSensorRows;
-  hooks.applyConfigSensorForm = applyConfigSensorForm;
   hooks.addStatusFields       = addStatusFields;
   hooks.saveConfig            = [](){ saveConfig(); };
   agri::WebUI::begin(g_cfg.common, hooks, FW_NAME, FW_VERSION);
@@ -147,15 +128,6 @@ void loop() {
         lastPub = now;
         if (mqttPublishState()) agri::Led::flashPublish();
       }
-    }
-  }
-
-  if (agri::networkUp() && g_cfg.common.ccm_enabled) {
-    static uint32_t lastCcm = 0;
-    uint32_t interval = (uint32_t)g_cfg.common.ccm_interval_s * 1000UL;
-    if (now - lastCcm >= interval) {
-      lastCcm = now;
-      if (ccmPublish()) agri::Led::flashPublish();
     }
   }
 
