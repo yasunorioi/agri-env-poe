@@ -15,7 +15,7 @@
 #include "ccm_pub.h"
 
 const char *FW_NAME    = "agri-env-poe";
-const char *FW_VERSION = "0.3.0";
+const char *FW_VERSION = "0.3.1";
 
 // globals declared extern in headers
 AppConfig g_cfg;
