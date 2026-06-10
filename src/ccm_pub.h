@@ -19,8 +19,12 @@
 inline bool ccmPublishOne(const char *type, float v, int decimals) {
   char buf[16];
   dtostrf(v, 1, decimals, buf);
+  // Append the configured ArSprout node-type suffix: "<Type>.<ntype>"
+  // (e.g. InAirTemp.cMC). Empty ntype = bare type.
+  String fullType = type;
+  if (g_cfg.common.ccm_ntype[0]) { fullType += '.'; fullType += g_cfg.common.ccm_ntype; }
   String xml = agri::ccmEnvelopeOpen();
-  xml += agri::ccmDatum(type,
+  xml += agri::ccmDatum(fullType.c_str(),
                         g_cfg.common.ccm_room,
                         g_cfg.common.ccm_region,
                         /*order=*/1,
