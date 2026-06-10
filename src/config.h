@@ -19,7 +19,11 @@ inline void setDefaults() {
   agri::commonDefaults(g_cfg.common,
                        "env_node_01", "agri-env-01",
                        /*mqtt prefix = house scope*/ "agriha/2",
-                       /*default_ccm_region (unused)=*/11);
+                       /*default_ccm_region = 別棟 ArSprout region*/13);
+  // ArSprout receive CCMs are configured at priority 1; match it (core
+  // default 29 is fine for spec managers). CCM itself stays off by default —
+  // enable per-site via /config (ccm_en) when feeding an ArSprout.
+  g_cfg.common.ccm_priority = 1;
 }
 
 inline void loadConfig() {

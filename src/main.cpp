@@ -14,9 +14,10 @@
 #include "config.h"
 #include "sensors.h"
 #include "mqtt_pub.h"
+#include "ccm_pub.h"
 
 const char *FW_NAME     = "agri-env-poe";
-const char *FW_VERSION  = "0.5.0";
+const char *FW_VERSION  = "0.6.0";
 const char *FW_REPO     = "yasunorioi/agri-env-poe";
 const char *FW_BIN_NAME = "agri-env-poe.bin";
 
@@ -92,6 +93,7 @@ void setup() {
   configTime(0, 0, "pool.ntp.org");
 
   agri::MQTT::begin();
+  agri::ccmBegin();   // optional ArSprout CCM export (gated by ccm_enabled)
 
   agri::WebHooks hooks;
   hooks.nodeTitle             = [](){ return FW_NAME; };
@@ -134,6 +136,15 @@ void loop() {
         lastPub = now;
         if (mqttPublishState()) agri::Led::flashPublish();
       }
+    }
+  }
+
+  if (agri::networkUp() && g_cfg.common.ccm_enabled) {
+    static uint32_t lastCcm = 0;
+    uint32_t interval = (uint32_t)g_cfg.common.ccm_interval_s * 1000UL;
+    if (now - lastCcm >= interval) {
+      lastCcm = now;
+      if (ccmPublish()) agri::Led::flashPublish();
     }
   }
 
