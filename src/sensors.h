@@ -75,3 +75,13 @@ inline void sensorsPoll() {
 
   g_last_sensor_ms = now;
 }
+
+// Saturation deficit / 室内飽差 (g/m³) derived from temperature (°C) and RH (%).
+// Matches the farm's earlier CCM node (calc_vpd): Tetens saturation vapour
+// pressure es (hPa) -> saturated vapour density 217*es/T_K, then
+// HD = density * (1 - RH/100). Exposed as ArSprout CCM type "InAirHD".
+inline float airHd(float t_c, float rh_pct) {
+  float es = 6.1078f * powf(10.0f, (7.5f * t_c) / (t_c + 237.3f));
+  float hd = 217.0f * es * (1.0f - rh_pct / 100.0f) / (t_c + 273.15f);
+  return hd < 0.0f ? 0.0f : hd;
+}

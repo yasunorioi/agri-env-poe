@@ -41,11 +41,13 @@ inline bool mqttPublishState() {
 
   bool any = false;
   char buf[16];
-  if (g_sht30_ok && !isnan(g_temp_c)) {
+  if (g_sht30_ok && !isnan(g_temp_c) && !isnan(g_humid_pct)) {
     dtostrf(g_temp_c, 1, 2, buf);
     any |= mqttPublishOne("InAirTemp", "C", buf);
     dtostrf(g_humid_pct, 1, 1, buf);
     any |= mqttPublishOne("InAirHumid", "%", buf);
+    dtostrf(airHd(g_temp_c, g_humid_pct), 1, 2, buf);
+    any |= mqttPublishOne("InAirHD", "g/m3", buf);
   }
   if (g_qmp_ok && !isnan(g_pressure_hpa)) {
     dtostrf(g_pressure_hpa, 1, 2, buf);

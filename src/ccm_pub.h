@@ -37,9 +37,10 @@ inline bool ccmPublishOne(const char *type, float v, int decimals) {
 inline bool ccmPublish() {
   if (!g_cfg.common.ccm_enabled) return false;
   bool any = false;
-  if (g_sht30_ok && !isnan(g_temp_c)) {
+  if (g_sht30_ok && !isnan(g_temp_c) && !isnan(g_humid_pct)) {
     any |= ccmPublishOne("InAirTemp",  g_temp_c,      2);
     any |= ccmPublishOne("InAirHumid", g_humid_pct,   1);
+    any |= ccmPublishOne("InAirHD",    airHd(g_temp_c, g_humid_pct), 2);
   }
   if (g_qmp_ok && !isnan(g_pressure_hpa))
     any |= ccmPublishOne("InAirPressure", g_pressure_hpa, 2);

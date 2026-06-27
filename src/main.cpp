@@ -17,7 +17,7 @@
 #include "ccm_pub.h"
 
 const char *FW_NAME     = "agri-env-poe";
-const char *FW_VERSION  = "0.7.0";
+const char *FW_VERSION  = "0.8.0";
 const char *FW_REPO     = "yasunorioi/agri-env-poe";
 const char *FW_BIN_NAME = "agri-env-poe.bin";
 
@@ -48,6 +48,8 @@ static String renderDashboardSensors() {
     s += "<tr><th>Temp</th><td>"; s += buf; s += " °C</td></tr>";
     dtostrf(g_humid_pct, 1, 1, buf);
     s += "<tr><th>Humidity</th><td>"; s += buf; s += " %</td></tr>";
+    dtostrf(airHd(g_temp_c, g_humid_pct), 1, 2, buf);
+    s += "<tr><th>飽差 (HD)</th><td>"; s += buf; s += " g/m³</td></tr>";
   }
   if (g_qmp_ok) {
     dtostrf(g_pressure_hpa, 1, 2, buf);
@@ -66,6 +68,7 @@ static void addStatusFields(JsonObject doc) {
   if (g_sht30_ok) {
     doc["temp_c"]    = g_temp_c;
     doc["humid_pct"] = g_humid_pct;
+    doc["hd_gm3"]    = airHd(g_temp_c, g_humid_pct);
   }
   if (g_qmp_ok)   doc["pressure_hpa"] = g_pressure_hpa;
   if (g_scd41_ok) doc["co2_ppm"]      = g_co2_ppm;
