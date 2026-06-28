@@ -17,6 +17,7 @@
 #include "sensors.h"
 
 inline bool ccmPublishOne(const char *type, float v, int decimals) {
+  if (!type || !type[0]) return false;  // empty CCM識別子 = this datum disabled
   char buf[16];
   dtostrf(v, 1, decimals, buf);
   // Append the configured ArSprout node-type suffix: "<Type>.<ntype>"
@@ -38,13 +39,13 @@ inline bool ccmPublish() {
   if (!g_cfg.common.ccm_enabled) return false;
   bool any = false;
   if (g_sht30_ok && !isnan(g_temp_c) && !isnan(g_humid_pct)) {
-    any |= ccmPublishOne("InAirTemp",  g_temp_c,      2);
-    any |= ccmPublishOne("InAirHumid", g_humid_pct,   1);
-    any |= ccmPublishOne("InAirHD",    airHd(g_temp_c, g_humid_pct), 2);
+    any |= ccmPublishOne(g_cfg.ccm_type_temp,  g_temp_c,      2);
+    any |= ccmPublishOne(g_cfg.ccm_type_humid, g_humid_pct,   1);
+    any |= ccmPublishOne(g_cfg.ccm_type_hd,    airHd(g_temp_c, g_humid_pct), 2);
   }
   if (g_qmp_ok && !isnan(g_pressure_hpa))
-    any |= ccmPublishOne("InAirPressure", g_pressure_hpa, 2);
+    any |= ccmPublishOne(g_cfg.ccm_type_press, g_pressure_hpa, 2);
   if (g_scd41_ok && g_co2_ppm > 0)
-    any |= ccmPublishOne("InAirCO2", (float)g_co2_ppm, 0);
+    any |= ccmPublishOne(g_cfg.ccm_type_co2, (float)g_co2_ppm, 0);
   return any;
 }

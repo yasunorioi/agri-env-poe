@@ -17,7 +17,7 @@
 #include "ccm_pub.h"
 
 const char *FW_NAME     = "agri-env-poe";
-const char *FW_VERSION  = "0.9.0";
+const char *FW_VERSION  = "0.10.0";
 const char *FW_REPO     = "yasunorioi/agri-env-poe";
 const char *FW_BIN_NAME = "agri-env-poe.bin";
 
@@ -88,6 +88,37 @@ static void addStatusFields(JsonObject doc) {
       doc["scd_humid_pct"] = g_co2_humid_pct;
     }
   }
+  // CCM識別子 (wire type names) — exposed for inspection / verification.
+  JsonObject ct = doc["ccm_types"].to<JsonObject>();
+  ct["temp"]  = g_cfg.ccm_type_temp;
+  ct["humid"] = g_cfg.ccm_type_humid;
+  ct["hd"]    = g_cfg.ccm_type_hd;
+  ct["press"] = g_cfg.ccm_type_press;
+  ct["co2"]   = g_cfg.ccm_type_co2;
+}
+
+// Project-owned Config rows: the per-sensor CCM識別子 (UECS type names).
+// Appended to the core Config page's CCM table. Empty input = datum off.
+static String renderCcmTypeRows() {
+  String s; s.reserve(520);
+  auto row = [&](const char *label, const char *name, const char *val) {
+    s += "<tr><th>"; s += label; s += "</th><td><input name="; s += name;
+    s += " value='"; s += val; s += "'></td></tr>";
+  };
+  row("CCM識別子: 気温 (SHT30)",   "ct_temp",  g_cfg.ccm_type_temp);
+  row("CCM識別子: 湿度 (SHT30)",   "ct_humid", g_cfg.ccm_type_humid);
+  row("CCM識別子: 飽差",           "ct_hd",    g_cfg.ccm_type_hd);
+  row("CCM識別子: 気圧 (QMP6988)", "ct_press", g_cfg.ccm_type_press);
+  row("CCM識別子: CO₂ (SCD41)",    "ct_co2",   g_cfg.ccm_type_co2);
+  return s;
+}
+
+static void applyCcmTypeForm(const String &body) {
+  agri::parseFormStr(body, "ct_temp",  g_cfg.ccm_type_temp,  sizeof(g_cfg.ccm_type_temp));
+  agri::parseFormStr(body, "ct_humid", g_cfg.ccm_type_humid, sizeof(g_cfg.ccm_type_humid));
+  agri::parseFormStr(body, "ct_hd",    g_cfg.ccm_type_hd,    sizeof(g_cfg.ccm_type_hd));
+  agri::parseFormStr(body, "ct_press", g_cfg.ccm_type_press, sizeof(g_cfg.ccm_type_press));
+  agri::parseFormStr(body, "ct_co2",   g_cfg.ccm_type_co2,   sizeof(g_cfg.ccm_type_co2));
 }
 
 void setup() {
@@ -117,6 +148,8 @@ void setup() {
   agri::WebHooks hooks;
   hooks.nodeTitle             = [](){ return FW_NAME; };
   hooks.renderDashboardSensors= renderDashboardSensors;
+  hooks.renderConfigSensorRows= renderCcmTypeRows;
+  hooks.applyConfigSensorForm = applyCcmTypeForm;
   hooks.addStatusFields       = addStatusFields;
   hooks.saveConfig            = [](){ saveConfig(); };
   agri::WebUI::begin(g_cfg.common, hooks, FW_NAME, FW_VERSION);
