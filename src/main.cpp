@@ -17,7 +17,7 @@
 #include "ccm_pub.h"
 
 const char *FW_NAME     = "agri-env-poe";
-const char *FW_VERSION  = "0.8.0";
+const char *FW_VERSION  = "0.8.1";
 const char *FW_REPO     = "yasunorioi/agri-env-poe";
 const char *FW_BIN_NAME = "agri-env-poe.bin";
 
