@@ -17,7 +17,7 @@
 #include "ccm_pub.h"
 
 const char *FW_NAME     = "agri-env-poe";
-const char *FW_VERSION  = "0.8.1";
+const char *FW_VERSION  = "0.9.0";
 const char *FW_REPO     = "yasunorioi/agri-env-poe";
 const char *FW_BIN_NAME = "agri-env-poe.bin";
 
@@ -40,23 +40,31 @@ SensirionI2cScd4x g_scd;
 
 // ---- Dashboard / Config hooks --------------------------------------------
 static String renderDashboardSensors() {
-  String s; s.reserve(360);
+  String s; s.reserve(480);
   char buf[12];
   s = F("<h3>Sensors</h3><table>");
+  // Label every value by its source sensor — this node has two temp/RH
+  // sources (SHT30 primary, SCD41 secondary) and it must be obvious which.
   if (g_sht30_ok) {
     dtostrf(g_temp_c, 1, 2, buf);
-    s += "<tr><th>Temp</th><td>"; s += buf; s += " °C</td></tr>";
+    s += "<tr><th>Temp (SHT30)</th><td>"; s += buf; s += " °C</td></tr>";
     dtostrf(g_humid_pct, 1, 1, buf);
-    s += "<tr><th>Humidity</th><td>"; s += buf; s += " %</td></tr>";
+    s += "<tr><th>Humidity (SHT30)</th><td>"; s += buf; s += " %</td></tr>";
     dtostrf(airHd(g_temp_c, g_humid_pct), 1, 2, buf);
     s += "<tr><th>飽差 (HD)</th><td>"; s += buf; s += " g/m³</td></tr>";
   }
   if (g_qmp_ok) {
     dtostrf(g_pressure_hpa, 1, 2, buf);
-    s += "<tr><th>Pressure</th><td>"; s += buf; s += " hPa</td></tr>";
+    s += "<tr><th>Pressure (QMP6988)</th><td>"; s += buf; s += " hPa</td></tr>";
   }
   if (g_scd41_ok) {
-    s += "<tr><th>CO₂</th><td>"; s += g_co2_ppm; s += " ppm</td></tr>";
+    s += "<tr><th>CO₂ (SCD41)</th><td>"; s += g_co2_ppm; s += " ppm</td></tr>";
+    if (!isnan(g_co2_temp_c)) {
+      dtostrf(g_co2_temp_c, 1, 2, buf);
+      s += "<tr><th>Temp (SCD41)</th><td>"; s += buf; s += " °C</td></tr>";
+      dtostrf(g_co2_humid_pct, 1, 1, buf);
+      s += "<tr><th>Humidity (SCD41)</th><td>"; s += buf; s += " %</td></tr>";
+    }
   }
   if (!g_sht30_ok && !g_qmp_ok && !g_scd41_ok)
     s += "<tr><th>Sensor</th><td>NONE detected</td></tr>";
@@ -66,12 +74,20 @@ static String renderDashboardSensors() {
 
 static void addStatusFields(JsonObject doc) {
   if (g_sht30_ok) {
+    // SHT30 = primary temp/RH (drives InAirTemp/InAirHumid/飽差).
     doc["temp_c"]    = g_temp_c;
     doc["humid_pct"] = g_humid_pct;
     doc["hd_gm3"]    = airHd(g_temp_c, g_humid_pct);
   }
   if (g_qmp_ok)   doc["pressure_hpa"] = g_pressure_hpa;
-  if (g_scd41_ok) doc["co2_ppm"]      = g_co2_ppm;
+  if (g_scd41_ok) {
+    doc["co2_ppm"] = g_co2_ppm;
+    // SCD41's own (secondary) temp/RH — InAirTempSCD41/InAirHumidSCD41.
+    if (!isnan(g_co2_temp_c)) {
+      doc["scd_temp_c"]    = g_co2_temp_c;
+      doc["scd_humid_pct"] = g_co2_humid_pct;
+    }
+  }
 }
 
 void setup() {
@@ -160,10 +176,11 @@ void loop() {
   static uint32_t lastStatus = 0;
   if (now - lastStatus >= 30000) {
     lastStatus = now;
-    Serial.printf("[STATUS] link=%d lease=%d mqtt=%d  T=%.2f H=%.1f P=%.2f CO2=%u  up=%lus\n",
+    Serial.printf("[STATUS] link=%d lease=%d mqtt=%d  SHT:T=%.2f H=%.1f  P=%.2f CO2=%u  SCD:T=%.2f H=%.1f  up=%lus\n",
                   agri::Network::link_up, agri::Network::have_lease,
                   agri::MQTT::connected(),
                   g_temp_c, g_humid_pct, g_pressure_hpa, (unsigned)g_co2_ppm,
+                  g_co2_temp_c, g_co2_humid_pct,
                   (unsigned long)(now / 1000));
   }
 

@@ -57,5 +57,15 @@ inline bool mqttPublishState() {
     snprintf(buf, sizeof(buf), "%u", (unsigned)g_co2_ppm);
     any |= mqttPublishOne("InAirCO2", "ppm", buf);
   }
+  // SCD41 also reports its own temp/RH. SHT30 stays primary (InAirTemp/
+  // InAirHumid); these are the CO2 sensor's secondary readings, kept on
+  // distinct types so the source is unambiguous (mqtt-topics.md §0.2/§0.3,
+  // following the DS18B20 sensor-typed precedent).
+  if (g_scd41_ok && !isnan(g_co2_temp_c)) {
+    dtostrf(g_co2_temp_c, 1, 2, buf);
+    any |= mqttPublishOne("InAirTempSCD41", "C", buf);
+    dtostrf(g_co2_humid_pct, 1, 1, buf);
+    any |= mqttPublishOne("InAirHumidSCD41", "%", buf);
+  }
   return any;
 }
