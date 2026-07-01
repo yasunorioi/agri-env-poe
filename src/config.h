@@ -1,6 +1,7 @@
-// config.h — agri-env-poe NVS-backed config. Just the library's
-// CommonConfig now: the per-sensor CCM channel orders went away with CCM
-// itself (MQTT-only node since 0.4.0).
+// config.h — agri-env-poe NVS-backed config. CommonConfig + per-sensor
+// CCM 識別子 (wire type names) + SCD41 校正状態 (ASC enable, FRC target,
+// FRC 結果) を持つ。FRC 進行中の状態 (WARMING_UP 等) は RAM 専用で
+// main.cpp 側にある。
 
 #pragma once
 
@@ -8,6 +9,13 @@
 #include <Preferences.h>
 #include <ArduinoJson.h>
 #include <AgriCommonConfig.h>
+
+// FRC 結果ステート (NVS scd_frc_state 用)。値は永続化される。
+enum FrcResultState : uint8_t {
+  FRC_RESULT_NEVER  = 0,
+  FRC_RESULT_OK     = 1,
+  FRC_RESULT_FAILED = 2,
+};
 
 struct AppConfig {
   agri::CommonConfig common;
@@ -21,6 +29,12 @@ struct AppConfig {
   char ccm_type_hd[16];
   char ccm_type_press[16];
   char ccm_type_co2[16];
+  // SCD41 校正状態
+  bool     scd_asc;            // Automatic Self-Calibration
+  uint16_t scd_frc_target;     // FRC target ppm (year-1-once)
+  long     scd_frc_ts;         // 最終 FRC unix epoch (0 = SNTP 未同期で実施)
+  int16_t  scd_frc_corr;       // 最終 correction ppm (signed)
+  uint8_t  scd_frc_state;      // FrcResultState
 };
 
 extern AppConfig g_cfg;
@@ -39,6 +53,11 @@ inline void setDefaults() {
   strlcpy(g_cfg.ccm_type_hd,    "InAirHD",       sizeof(g_cfg.ccm_type_hd));
   strlcpy(g_cfg.ccm_type_press, "InAirPressure", sizeof(g_cfg.ccm_type_press));
   strlcpy(g_cfg.ccm_type_co2,   "InAirCO2",      sizeof(g_cfg.ccm_type_co2));
+  g_cfg.scd_asc        = false;   // 温室用途では OFF 既定 (年1回 FRC で補正)
+  g_cfg.scd_frc_target = 400;
+  g_cfg.scd_frc_ts     = 0;
+  g_cfg.scd_frc_corr   = 0;
+  g_cfg.scd_frc_state  = FRC_RESULT_NEVER;
 }
 
 inline void loadConfig() {
@@ -57,6 +76,11 @@ inline void loadConfig() {
   loadType("ct_hd",    g_cfg.ccm_type_hd,    sizeof(g_cfg.ccm_type_hd));
   loadType("ct_press", g_cfg.ccm_type_press, sizeof(g_cfg.ccm_type_press));
   loadType("ct_co2",   g_cfg.ccm_type_co2,   sizeof(g_cfg.ccm_type_co2));
+  g_cfg.scd_asc        = p.getBool ("scd_asc",       g_cfg.scd_asc);
+  g_cfg.scd_frc_target = p.getUShort("scd_frc_tgt",  g_cfg.scd_frc_target);
+  g_cfg.scd_frc_ts     = p.getLong ("scd_frc_ts",    g_cfg.scd_frc_ts);
+  g_cfg.scd_frc_corr   = p.getShort("scd_frc_corr",  g_cfg.scd_frc_corr);
+  g_cfg.scd_frc_state  = p.getUChar("scd_frc_state", g_cfg.scd_frc_state);
   p.end();
 }
 
@@ -69,6 +93,11 @@ inline bool saveConfig() {
   p.putString("ct_hd",    g_cfg.ccm_type_hd);
   p.putString("ct_press", g_cfg.ccm_type_press);
   p.putString("ct_co2",   g_cfg.ccm_type_co2);
+  p.putBool  ("scd_asc",       g_cfg.scd_asc);
+  p.putUShort("scd_frc_tgt",   g_cfg.scd_frc_target);
+  p.putLong  ("scd_frc_ts",    g_cfg.scd_frc_ts);
+  p.putShort ("scd_frc_corr",  g_cfg.scd_frc_corr);
+  p.putUChar ("scd_frc_state", g_cfg.scd_frc_state);
   p.end();
   return true;
 }
