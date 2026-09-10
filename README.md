@@ -96,6 +96,9 @@ pio run -e m5atom-poe -t upload                                # 初回 USB-C
 pio run -e m5atom-poe -t upload --upload-port agri-env-01.local  # OTA
 ```
 
+> 🛠 **ビルド環境（Windows / Linux 共用）・Linux 初回セットアップ（udev 等）** →
+> [agri-node-poe-core/docs/cross-platform-build.md](https://github.com/yasunorioi/agri-node-poe-core/blob/main/docs/cross-platform-build.md)
+
 書き込み後は `http://agri-env-01.local/` で UI にアクセス。
 以降の更新は Dashboard 上部の **Update** ボタン (GitHub Release 経由) でも可。
 
