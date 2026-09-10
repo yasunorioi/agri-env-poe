@@ -376,6 +376,10 @@ void loop() {
   agri::otaHandle();
   agri::OTA::poll();
   agri::WebUI::handle(agri::Network::link_up, agri::Network::have_lease);
+  // No DHCP lease for a grace period (cable out / no LAN / just-unboxed) -> raise
+  // a WPA2 SoftAP (SSID = hostname) serving the WebUI so the node can be
+  // configured wirelessly. Torn down automatically once Ethernet gets a lease.
+  agri::ProvisionAP::poll(agri::Network::have_lease, g_cfg.common.hostname);
 
   uint32_t now = millis();
 
