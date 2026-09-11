@@ -2,16 +2,16 @@
 
 [🇯🇵 日本語](README_ja.md) · **English**
 
-A greenhouse environment sensor node built with the M5Stack ATOM PoE Kit +
-ENV III (SHT30 + QMP6988) + SCD41. It publishes temperature, humidity,
+A greenhouse environment sensor node built with the [M5Stack ATOM PoE Kit](https://docs.m5stack.com/en/atom/atom_poe) +
+[ENV III](https://docs.m5stack.com/en/unit/envIII) (SHT30 + QMP6988) + [SCD41](https://sensirion.com/products/catalog/SCD41). It publishes temperature, humidity,
 pressure, and CO₂ over the agriha-schema MQTT, and can also emit ArSprout-
 compatible UECS-CCM broadcasts when needed. The common foundation is
 [`agri-node-poe-core`](https://github.com/yasunorioi/agri-node-poe-core).
 
 ## Hardware
 
-- **MCU**: M5Stack ATOM Lite (ESP32-PICO-D4)
-- **Ethernet (PoE)**: M5Stack ATOM PoE Base (Wiznet W5500 on SPI)
+- **MCU**: [M5Stack ATOM Lite](https://docs.m5stack.com/en/core/ATOM%20Lite) (ESP32-PICO-D4)
+- **Ethernet (PoE)**: [M5Stack ATOM PoE Base](https://docs.m5stack.com/en/atom/Atomic%20PoE%20Base) (Wiznet W5500 on SPI)
 - **I²C**: M5 Grove (G26 SDA / G32 SCL) → Grove I²C HUB
   - **M5Stack ENV III Unit**: SHT30 (0x44) / QMP6988 (0x70)
   - **M5Stack CO2 Unit**: Sensirion SCD41 (0x62)
@@ -61,7 +61,7 @@ compatible UECS-CCM broadcasts when needed. The common foundation is
 
 SHT30 provides the primary temperature/humidity; since the SCD41's built-in T/RH is
 less accurate than the SHT30, it is separated under a different type name
-(the same reasoning as the DS18B20 sensor-typed precedent).
+(the same reasoning as the [DS18B20](https://www.switch-science.com/products/10979) sensor-typed precedent).
 
 ## Optional UECS-CCM output
 

@@ -2,15 +2,15 @@
 
 **日本語** · [🇬🇧 English](README_en.md)
 
-M5Stack ATOM PoE Kit + ENV III (SHT30 + QMP6988) + SCD41 を使った温室環境
+[M5Stack ATOM PoE Kit](https://docs.m5stack.com/en/atom/atom_poe) + [ENV III](https://docs.m5stack.com/en/unit/envIII) (SHT30 + QMP6988) + [SCD41](https://sensirion.com/products/catalog/SCD41) を使った温室環境
 センサーノード。気温・湿度・気圧・CO₂ を agriha スキーマ MQTT で配信し、
 必要に応じて ArSprout 互換の UECS-CCM ブロードキャストにも出せる。共通基盤
 は [`agri-node-poe-core`](https://github.com/yasunorioi/agri-node-poe-core)。
 
 ## ハードウェア
 
-- **MCU**: M5Stack ATOM Lite (ESP32-PICO-D4)
-- **Ethernet (PoE)**: M5Stack ATOM PoE Base (Wiznet W5500 on SPI)
+- **MCU**: [M5Stack ATOM Lite](https://docs.m5stack.com/en/core/ATOM%20Lite) (ESP32-PICO-D4)
+- **Ethernet (PoE)**: [M5Stack ATOM PoE Base](https://docs.m5stack.com/en/atom/Atomic%20PoE%20Base) (Wiznet W5500 on SPI)
 - **I²C**: M5 Grove (G26 SDA / G32 SCL) → Grove I²C HUB
   - **M5Stack ENV III Unit**: SHT30 (0x44) / QMP6988 (0x70)
   - **M5Stack CO2 Unit**: Sensirion SCD41 (0x62)
@@ -59,7 +59,7 @@ M5Stack ATOM PoE Kit + ENV III (SHT30 + QMP6988) + SCD41 を使った温室環�
 | `<prefix>/sensor/InAirHumidSCD41` | %    | SCD41 内蔵 (参考値) |
 
 SHT30 が主温湿度、SCD41 内蔵の T/RH は精度で SHT30 に劣るため別型名で分離
-(DS18B20 の sensor-typed precedent と同じ考え)。
+([DS18B20](https://www.switch-science.com/products/10979) の sensor-typed precedent と同じ考え)。
 
 ## Optional UECS-CCM 出力
 
