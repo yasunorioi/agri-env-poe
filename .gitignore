@@ -2,3 +2,5 @@
 .vscode
 compile_commands.json
 *.tmp
+*.bin
+src/idf_component.yml
